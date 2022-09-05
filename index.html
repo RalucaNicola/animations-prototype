@@ -1,0 +1,444 @@
+<!-- https://zurich.maps.arcgis.com/home/webscene/viewer.html?webscene=cb61bb9e44b944f2a7d1fa121cc874a3 -->
+
+<!-- https://data.stadt-zuerich.ch/dataset/ted_taz_verkehrszaehlungen_werte_fussgaenger_velo -->
+
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>
+    Add Graphics to a SceneView | Sample | ArcGIS API for JavaScript 4.24
+  </title>
+
+  <link rel="stylesheet" href="https://js.arcgis.com/4.24/esri/themes/dark/main.css" />
+  <script src="./papaparse.min.js"></script>
+  <script src="https://js.arcgis.com/4.24/"></script>
+
+  <style>
+    html,
+    body,
+    #viewDiv {
+      padding: 0;
+      margin: 0;
+      height: 100%;
+      width: 100%;
+      background: white;
+      font-family: "Avenir Next", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      color: #d1d1d1;
+    }
+
+    #menu {
+      position: absolute;
+      right: 20px;
+      top: 20px;
+      background-color: rgba(0, 0, 0, 0.8);
+      border-radius: 10px;
+      width: 375px;
+      box-shadow: 0 1px 4px rgb(0 0 0 / 80%);
+    }
+
+    header {
+      background-color: rgb(23, 180, 142);
+      color: white;
+      font-weight: bold;
+      font-family: "Avenir Next", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      text-align: center;
+      padding: 1rem 1.5rem;
+      font-size: 1.5rem;
+      border-radius: 10px 10px 0 0;
+      letter-spacing: 3px;
+    }
+
+    #legend {
+      padding: 0 20px;
+    }
+
+    .labels {
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .countGradient {
+      height: 40px;
+      background: linear-gradient(90deg, rgba(0, 255, 176, 0.6), rgba(255, 94, 0, 0.6));
+      clip-path: polygon(0 50%, 100% 0, 100% 100%, 0 100%);
+      position: absolute;
+      width: calc(100% - 30px);
+      left: 15px;
+    }
+
+    .caption {
+      font-weight: bold;
+      margin-top: 7px;
+      font-size: 0.8rem;
+    }
+
+    .legendContainer {
+      position: relative;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      width: 200px;
+    }
+
+    .bar {
+      width: 15px;
+      background: #d1d1d1;
+    }
+
+    .barLeft>.bar {
+      height: 20px;
+      background-color: rgb(0, 255, 176);
+    }
+
+    .barRight>.bar {
+      height: 40px;
+      position: relative;
+      right: calc(-100% + 15px);
+      background-color: rgb(255, 94, 0);
+    }
+
+    .label {
+      margin: 5px 0;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    #slides {
+      margin: 20px;
+    }
+
+    #slides>button {
+      font-family: "Avenir Next", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      color: #d1d1d1;
+      background-color: rgba(23, 180, 142, 0.1);
+      border: 1px solid rgb(23, 180, 142);
+      transition: background-color 200ms linear;
+      padding: 7px 14px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: 600;
+      margin: 5px;
+    }
+
+    #slides>button:hover {
+      background-color: rgba(23, 180, 142, 0.9);
+      color: white;
+    }
+  </style>
+
+</head>
+
+<body>
+  <div id="viewDiv">
+  </div>
+  <div id="menu">
+    <header>
+      Zurich pedestrian counts
+    </header>
+    <div id="legend">
+      <div class="legendContainer">
+        <div class="countGradient"></div>
+        <div class="barLeft">
+          <p class="label">0</p>
+          <div class="bar"></div>
+        </div>
+        <div class="barRight">
+          <p class="label"> > 400</p>
+          <div class="bar"></div>
+        </div>
+      </div>
+
+      <p class="caption">Number of persons per 15 minutes</p>
+    </div>
+    <div id="timeSliderDiv"></div>
+    <div id="slides">
+    </div>
+  </div>
+</body>
+
+<script>
+  require([
+    "esri/WebScene",
+    "esri/views/SceneView",
+    "esri/layers/GraphicsLayer",
+    "esri/layers/GeoJSONLayer",
+    "esri/Graphic",
+    "esri/core/scheduling",
+    "esri/Color",
+    "esri/widgets/TimeSlider",
+    "esri/rest/support/Query",
+    "esri/rest/query",
+    "esri/widgets/LayerList",
+    "esri/widgets/Daylight",
+    "esri/geometry/Point"
+  ], (WebScene, SceneView, GraphicsLayer, GeoJSONLayer, Graphic, scheduling, Color, TimeSlider, Query, query, LayerList, Daylight, Point) => {
+    const dates = [];
+    const properties = {};
+    const graphics = [];
+    let oldTime;
+    let animationFrameTask = null;
+    const duration = 1000;
+
+    const graphicsLayer = new GraphicsLayer({
+      elevationInfo: {
+        mode: "relative-to-scene",
+      }
+    });
+    const labelsLayer = new GraphicsLayer({
+      elevationInfo: {
+        mode: "relative-to-scene",
+      }
+    });
+
+    Papa.parse("./2019_04_08_zurich.csv", {
+      download: true, complete: function (results) {
+        for (let i = 1; i < results.data.length; i++) {
+          const data = results.data[i];
+          const timedate = data[2];
+          const id = data[1];
+          if (dates.indexOf(timedate) === -1) {
+            dates.push(timedate);
+          }
+          const property = {
+            date: new Date(timedate),
+            pedestrian: parseInt(data[5]) + parseInt(data[6]),
+            bike: parseInt(data[3]) + parseInt(data[4])
+          }
+          if (!properties.hasOwnProperty(id)) {
+            properties[id] = [property]
+          } else {
+            properties[id].push(property);
+          }
+        }
+
+        fetch("./locations.json")
+          .then(response => {
+            return response.json();
+          })
+          .then(locations => {
+            locations.features.forEach(feature => {
+              if (properties.hasOwnProperty(feature.fk_zaehler)) {
+                graphics.push(new Graphic({
+                  geometry: new Point({
+                    x: feature.geometry.coordinates[0],
+                    y: feature.geometry.coordinates[1],
+                    spatialReference: {
+                      wkid: 4326
+                    }
+                  }),
+                  attributes: {
+                    id: feature.fk_zaehler
+                  }, symbol: getSymbol(0, [0, 255, 176])
+                }))
+              }
+            })
+            graphicsLayer.graphics = graphics;
+            createMap();
+            createTimeline(dates.map(date => new Date(date)));
+          });
+      }
+    });
+
+    const formatNumber = (number) => {
+      return new Intl.NumberFormat('en-US').format(number);
+    };
+
+    function createMap() {
+      const view = new SceneView({
+        container: "viewDiv",
+        map: new WebScene({
+          portalItem: {
+            id: "abbb675475f940f284563767659d5a6e"
+          }
+        }),
+        qualityProfile: "high",
+      });
+      view.environment.lighting.directShadowsEnabled = true;
+      view.environment.lighting.waterReflectionEnabled = true;
+      view.map.addMany([graphicsLayer, labelsLayer]);
+      // const layerList = new LayerList({ view });
+      // view.ui.add(layerList, "top-right");
+      // const daylight = new Daylight({ view });
+      // view.ui.add(daylight, "top-right");
+      const slidesContainer = document.getElementById("slides");
+      view.on("click", evt => {
+        view.hitTest(evt).then(result => console.log(result));
+      })
+      view.map.when(() => {
+        view.map.presentation.slides.forEach((slide) => {
+          const button = document.createElement("button");
+          button.innerHTML = slide.title.text;
+          button.addEventListener("click", () => {
+            slide.applyTo(view);
+          });
+          slidesContainer.appendChild(button);
+        });
+      })
+      window.view = view;
+    }
+
+
+
+    const getSymbol = (size, color) => {
+      return {
+        type: "point-3d",
+        symbolLayers: [{
+          type: "object",
+          resource: { primitive: "cube" },
+          material: { color: [color.r, color.g, color.b, 1] },
+          height: size,
+          width: 3,
+          depth: 3,
+          anchor: "bottom"
+        }]
+      };
+    }
+
+    const getSizeFromValue = (value) => {
+      const stops = [{ value: 0, size: 0 },
+      { value: 400, size: 200 }];
+      for (let i = 0; i < stops.length; i++) {
+        const stop = stops[i];
+        if (value < stop.value) {
+          if (i === 0) {
+            return stop.size;
+          }
+          const prev = stops[i - 1];
+          const weight = (value - prev.value) / (stop.value - prev.value);
+          return Math.abs((stop.size - prev.size) * weight);
+        }
+      }
+      return stops[stops.length - 1].size;
+    }
+
+    const getColorFromValue = (value) => {
+      const stops = [
+        { value: 0, color: new Color([0, 255, 176]) },
+        { value: 400, color: new Color([255, 94, 0]) }
+      ];
+      for (let i = 0; i < stops.length; i++) {
+        const stop = stops[i];
+
+        if (value < stop.value) {
+          if (i === 0) {
+            return stop.color;
+          }
+
+          const prev = stops[i - 1];
+
+          const weight = (value - prev.value) / (stop.value - prev.value);
+          return Color.blendColors(prev.color, stop.color, weight);
+        }
+      }
+      return stops[stops.length - 1].color;
+    }
+
+    function startAnimation(newTime, oldTime) {
+      let t = 0;
+
+      const update = () => {
+        let percentage = 1 - (duration - t) / duration;
+        if (percentage > 1) {
+          percentage = 1;
+          stopAnimation();
+        }
+        labelsLayer.removeAll()
+        graphicsLayer.graphics.forEach(graphic => {
+          const oldValue = properties[graphic.attributes.id].filter(property => property.date.getTime() === oldTime.getTime())[0];
+          const newValue = properties[graphic.attributes.id].filter(property => property.date.getTime() === newTime.getTime())[0];
+          if (newValue && oldValue) {
+            //let bikeCount = oldValue["bike"] + percentage * (newValue["bike"] - oldValue["bike"]);
+            let pedestrianCount = oldValue["pedestrian"] + percentage * (newValue["pedestrian"] - oldValue["pedestrian"]);
+            let currentSize = getSizeFromValue(pedestrianCount);
+            let currentColor = getColorFromValue(pedestrianCount);
+            graphic.symbol = getSymbol(currentSize, currentColor);
+            if (pedestrianCount > 0) {
+              const label = new Graphic({
+                geometry: new Point({
+                  x: graphic.geometry.x,
+                  y: graphic.geometry.y,
+                  z: currentSize,
+                  spatialReference: {
+                    wkid: 4326
+                  }
+                }),
+                symbol: {
+                  type: "point-3d",
+                  symbolLayers: [{
+                    type: "text",
+                    material: { color: [255, 255, 255] },
+                    background: {
+                      color: currentColor
+                    },
+                    size: 12,
+                    text: `${formatNumber(Math.floor(pedestrianCount))}`
+                  }],
+                  verticalOffset: {
+                    screenLength: 20,
+                    maxWorldLength: 200,
+                    minWorldLength: 20
+                  },
+                  callout: {
+                    type: "line",
+                    size: 1,
+                    color: currentColor,
+                    border: {
+                      color: [0, 0, 0, 0]
+                    }
+                  }
+                }
+              })
+              labelsLayer.add(label);
+            }
+          }
+        })
+
+      }
+      animationFrameTask = scheduling.addFrameTask({
+        update: ev => {
+          t += ev?.deltaTime ?? 0;
+          update(t);
+        },
+      });
+    }
+
+    function stopAnimation() {
+      animationFrameTask.remove();
+      animationFrameTask = null;
+    }
+
+
+    function createTimeline(dates) {
+      const start = dates[0];
+      const end = dates[dates.length - 1];
+      oldTime = start;
+      const timeSlider = new TimeSlider({
+        container: "timeSliderDiv",
+        mode: "instant",
+        fullTimeExtent: {
+          start,
+          end
+        },
+        timeExtent: {
+          start, end: start
+        },
+        stops: { dates },
+        playRate: duration + 200
+      });
+      timeSlider.watch("timeExtent", (value) => {
+        const newTime = value.start;
+        if (animationFrameTask) {
+          stopAnimation();
+        }
+        startAnimation(newTime, oldTime);
+        oldTime = newTime;
+      });
+    }
+
+
+  });
+</script>
+
+</html>
