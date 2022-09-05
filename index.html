@@ -47,7 +47,7 @@
       padding: 1rem 1.5rem;
       font-size: 1.5rem;
       border-radius: 10px 10px 0 0;
-      letter-spacing: 3px;
+      letter-spacing: 2px;
     }
 
     #legend {
@@ -62,7 +62,7 @@
     .countGradient {
       height: 40px;
       background: linear-gradient(90deg, rgba(0, 255, 176, 0.6), rgba(255, 94, 0, 0.6));
-      clip-path: polygon(0 50%, 100% 0, 100% 100%, 0 100%);
+      clip-path: polygon(0 90%, 100% 0, 100% 100%, 0 100%);
       position: absolute;
       width: calc(100% - 30px);
       left: 15px;
@@ -88,7 +88,7 @@
     }
 
     .barLeft>.bar {
-      height: 20px;
+      height: 5px;
       background-color: rgb(0, 255, 176);
     }
 
@@ -297,7 +297,7 @@
     }
 
     const getSizeFromValue = (value) => {
-      const stops = [{ value: 0, size: 0 },
+      const stops = [{ value: 0, size: 100 },
       { value: 400, size: 200 }];
       for (let i = 0; i < stops.length; i++) {
         const stop = stops[i];
