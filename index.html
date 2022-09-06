@@ -36,16 +36,17 @@
       border-radius: 10px;
       width: 375px;
       box-shadow: 0 1px 4px rgb(0 0 0 / 80%);
+      z-index: 1;
     }
 
-    header {
+    #menu header {
       background-color: rgb(23, 180, 142);
       color: white;
       font-weight: bold;
       font-family: "Avenir Next", "Helvetica Neue", Helvetica, Arial, sans-serif;
       text-align: center;
       padding: 1rem 1.5rem;
-      font-size: 1.5rem;
+      font-size: 1.2rem;
       border-radius: 10px 10px 0 0;
       letter-spacing: 2px;
     }
@@ -61,7 +62,7 @@
 
     .countGradient {
       height: 40px;
-      background: linear-gradient(90deg, rgba(0, 255, 176, 0.6), rgba(255, 94, 0, 0.6));
+      background: linear-gradient(0deg, rgba(0, 255, 176, 0.7), rgba(255, 94, 0, 0.7));
       clip-path: polygon(0 90%, 100% 0, 100% 100%, 0 100%);
       position: absolute;
       width: calc(100% - 30px);
@@ -96,7 +97,7 @@
       height: 40px;
       position: relative;
       right: calc(-100% + 15px);
-      background-color: rgb(255, 94, 0);
+      background: linear-gradient(0deg, rgba(0, 255, 176, 1), rgba(255, 94, 0, 1));
     }
 
     .label {
@@ -125,6 +126,55 @@
     #slides>button:hover {
       background-color: rgba(23, 180, 142, 0.9);
       color: white;
+    }
+
+    .invisible {
+      opacity: 0;
+    }
+
+    #tooltip {
+      position: absolute;
+      top: 0;
+      left: 0;
+      color: white;
+      width: 200px;
+      pointer-events: none;
+      transition: opacity 500ms;
+      z-index: 0;
+      display: flex;
+      align-items: center;
+    }
+
+
+    #tooltip .container {
+      background: rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(2px);
+      border-right: 0.5px solid white;
+      padding: 10px 15px;
+    }
+
+    #tooltip header {
+      font-size: 1rem;
+      font-weight: bold;
+      padding: 5px 0;
+      text-transform: uppercase;
+    }
+
+    #tooltip p {
+      margin: 0;
+      font-size: 0.9rem;
+      font-weight: bold;
+    }
+
+    #tooltip span {
+      font-size: 1.4rem;
+    }
+
+    .callout {
+      width: 50px;
+      height: 0;
+      border-bottom: 0.5px solid white;
+      margin: 0 auto;
     }
   </style>
 
@@ -156,6 +206,13 @@
     <div id="slides">
     </div>
   </div>
+  <div id="tooltip" class="overlay invisible">
+    <div class="container">
+      <header>Zurich Spring Festival</header>
+      <p>Parade with thousands of people</p>
+    </div>
+    <div class="callout"></div>
+  </div>
 </body>
 
 <script>
@@ -182,17 +239,21 @@
     let oldTime;
     let animationFrameTask = null;
     const duration = 1000;
+    let tooltipVisible = false;
+    const tooltip = document.getElementById("tooltip");
+    const tooltipPeriod = {
+      start: new Date('April 8, 2019 15:00:00'),
+      end: new Date('April 8, 2019 18:30:00')
+    }
 
     const graphicsLayer = new GraphicsLayer({
       elevationInfo: {
-        mode: "relative-to-scene",
-        offset: 10
+        mode: "relative-to-scene"
       }
     });
     const labelsLayer = new GraphicsLayer({
       elevationInfo: {
-        mode: "relative-to-scene",
-        offset: 10
+        mode: "relative-to-scene"
       }
     });
 
@@ -294,20 +355,32 @@
       const cubeGeometry = Mesh.createBox(geometry, { size: { height: size, width: 15, depth: 15 } });
       cubeGeometry.components[0].material = new MeshMaterialMetallicRoughness({
         //color: "#000",
-        emissiveColor: color
+        //emissiveColor: "#555"
       });
       const coordinateColors = [];
-      const colorRGB = [color.r, color.g, color.b];
+      const topColor = [color.r, color.g, color.b, 255];
+      const baseColor = [0, 255, 176, 255];
       // const colorRGB = [0, 0, 0];
+      // const colorRGB = [color.r, color.g, color.b];
+      // for (let i = 0; i < 24; i += 4) {
+      //   opacity = i === 20 ? 0 : 255;
+      //   if (i < 16) {
+      //     coordinateColors.push([...colorRGB, 255 - opacity], [...colorRGB, 255 - opacity], [...colorRGB, opacity], [...colorRGB, opacity]);
+      //   } else {
+      //     coordinateColors.push([...colorRGB, opacity], [...colorRGB, opacity], [...colorRGB, opacity], [...colorRGB, opacity]);
+      //   }
+      // }
       for (let i = 0; i < 24; i += 4) {
-        opacity = i === 20 ? 0 : 255;
         if (i < 16) {
-          coordinateColors.push([...colorRGB, 255 - opacity], [...colorRGB, 255 - opacity], [...colorRGB, opacity], [...colorRGB, opacity]);
-        } else {
-          coordinateColors.push([...colorRGB, opacity], [...colorRGB, opacity], [...colorRGB, opacity], [...colorRGB, opacity]);
+          coordinateColors.push(baseColor, baseColor, topColor, topColor);
+        }
+        if (i === 20) {
+          coordinateColors.push(baseColor, baseColor, baseColor, baseColor);
+        }
+        if (i === 16) {
+          coordinateColors.push(topColor, topColor, topColor, topColor);
         }
       }
-
       const colorVertices = Uint8Array.from(coordinateColors.flat())
       cubeGeometry.vertexAttributes.color = colorVertices;
       return cubeGeometry;
@@ -462,6 +535,14 @@
       });
       timeSlider.watch("timeExtent", (value) => {
         const newTime = value.start;
+        if (newTime.getTime() >= tooltipPeriod.start.getTime() && newTime.getTime() <= tooltipPeriod.end.getTime()) {
+          tooltipVisible = true;
+          updateOverlay();
+          tooltip.classList.remove("invisible");
+        } else {
+          tooltipVisible = false;
+          tooltip.classList.add("invisible");
+        }
         if (animationFrameTask) {
           stopAnimation();
         }
@@ -470,6 +551,27 @@
       });
     }
 
+    const tooltipPoint = new Point({
+      x: 951024.6221827283,
+      y: 6002757.655869749,
+      z: 408.4010905241594,
+      spatialReference: {
+        wkid: 3857
+      }
+    });
+
+    function updateOverlay() {
+      if (view.ready) {
+        const screenPoint = view.toScreen(tooltipPoint);
+        if (screenPoint) {
+          tooltip.style.top = `${screenPoint.y - tooltip.clientHeight / 2}px`;
+          tooltip.style.left = `${screenPoint.x - tooltip.clientWidth}px`;
+        }
+      }
+      if (tooltipVisible) {
+        requestAnimationFrame(updateOverlay);
+      }
+    }
 
   });
 </script>
