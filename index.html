@@ -291,7 +291,7 @@
     }
 
     const getGeometry = (geometry, size, color) => {
-      const cubeGeometry = Mesh.createBox(geometry, { size: { height: size, width: 20, depth: 20 } });
+      const cubeGeometry = Mesh.createBox(geometry, { size: { height: size, width: 15, depth: 15 } });
       cubeGeometry.components[0].material = new MeshMaterialMetallicRoughness({
         //color: "#000",
         emissiveColor: color
