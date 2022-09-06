@@ -138,13 +138,17 @@
       left: 0;
       color: white;
       width: 200px;
-      pointer-events: none;
       transition: opacity 500ms;
       z-index: 0;
       display: flex;
       align-items: center;
     }
 
+    #tooltip a {
+      color: white;
+      text-decoration: none;
+      border-bottom: 1px white solid;
+    }
 
     #tooltip .container {
       background: rgba(0, 0, 0, 0.4);
@@ -162,7 +166,7 @@
 
     #tooltip p {
       margin: 0;
-      font-size: 0.9rem;
+      font-size: 0.8rem;
       font-weight: bold;
     }
 
@@ -209,7 +213,9 @@
   <div id="tooltip" class="overlay invisible">
     <div class="container">
       <header>Zurich Spring Festival</header>
-      <p>Parade with thousands of people</p>
+      <p>Parade with thousands of people. <a
+          href="https://www.sechselaeuten.ch/de/das-fest/saechsiluete-2019/montag--8042019" target="_blank">Read
+          more</a></p>
     </div>
     <div class="callout"></div>
   </div>
